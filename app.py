@@ -268,10 +268,105 @@ SECTIONS = [
     ('economy', '经济', '📊'),
 ]
 
+# 完整性检查结果缓存（避免每次访问都查库，10分钟刷新一次）
+_integrity_cache = {'checked_at': None, 'result': None}
+INTEGRITY_CHECK_INTERVAL = 600  # 秒
+
+
+def check_weekly_integrity():
+    """检查周报数据完整性，返回问题列表。
+
+    检查项：
+      - 空标题/空URL
+      - 缺失正文或AI分析（有URL但无content）
+      - images 字段 JSON 格式损坏
+      - importance 异常值
+      - 孤儿数据（无效 region/section）
+    发现的损坏会尝试自动修复（如重置损坏的 images JSON）。
+    """
+    import json as _json
+    now = datetime.now()
+    # 缓存命中
+    if (_integrity_cache['checked_at']
+            and (now - _integrity_cache['checked_at']).total_seconds() < INTEGRITY_CHECK_INTERVAL):
+        return _integrity_cache['result']
+
+    issues = []
+    fixed = []
+
+    # 1. 空标题/空URL
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE title IS NULL OR title = ''", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"空标题: {r['c']} 条")
+
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE url IS NULL OR url = ''", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"空URL: {r['c']} 条")
+
+    # 2. 缺失正文/AI分析
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE url IS NOT NULL AND url != '' AND (content IS NULL OR content = '')", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"缺失正文: {r['c']} 条")
+
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE ai_summary IS NULL OR ai_summary = ''", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"缺失AI分析: {r['c']} 条")
+
+    # 3. images JSON 损坏检测与自动修复
+    bad_rows = query("SELECT id, images FROM weekly_reports WHERE images IS NOT NULL AND images != ''")
+    bad_ids = []
+    for row in bad_rows:
+        try:
+            _json.loads(row['images'])
+        except Exception:
+            bad_ids.append(row['id'])
+    if bad_ids:
+        issues.append(f"images JSON损坏: {len(bad_ids)} 条")
+        # 自动修复：重置为空数组
+        for bid in bad_ids:
+            execute("UPDATE weekly_reports SET images = '[]' WHERE id = %s", (bid,))
+        fixed.append(f"已修复 {len(bad_ids)} 条损坏的 images JSON")
+
+    # 4. importance 异常（NULL 或负数）
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE importance IS NULL OR importance < 0", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"importance异常: {r['c']} 条")
+        execute("UPDATE weekly_reports SET importance = 10 WHERE importance IS NULL OR importance < 0")
+        fixed.append(f"已修复 {r['c']} 条异常 importance（设为默认值10）")
+
+    # 5. 无效 region/section
+    valid_regions = ('domestic', 'international')
+    valid_sections = [s[0] for s in SECTIONS]
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE region NOT IN ('domestic','international')", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"无效region: {r['c']} 条")
+    r = query("SELECT COUNT(*) AS c FROM weekly_reports WHERE section NOT IN ('tech','military','ai','economy')", one=True)
+    if r and r['c'] > 0:
+        issues.append(f"无效section: {r['c']} 条")
+
+    result = {
+        'issues': issues,
+        'fixed': fixed,
+        'checked_at': now.strftime('%Y-%m-%d %H:%M:%S'),
+        'is_ok': len(issues) == 0,
+    }
+    _integrity_cache['checked_at'] = now
+    _integrity_cache['result'] = result
+    return result
+
 
 @app.route('/weekly')
 def weekly():
     """周报：国内外新闻，按版块分类"""
+    # 访问时自动检查数据完整性（带缓存，不拖慢访问）
+    integrity = check_weekly_integrity()
+    if not integrity['is_ok']:
+        for msg in integrity['fixed']:
+            flash(f'🔧 数据自检: {msg}', 'success')
+        for msg in integrity['issues']:
+            if not any(msg in f for f in integrity['fixed']):
+                flash(f'⚠️ 数据异常: {msg}', 'error')
+
     region = request.args.get('region', 'domestic')  # domestic / international
     if region not in ('domestic', 'international'):
         region = 'domestic'
