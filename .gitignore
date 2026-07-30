@@ -1,0 +1,60 @@
+# ===== Python 运行时 =====
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# ===== 日志与运行时文件 =====
+*.log
+flask.pid
+flask.log
+precache.log
+precache2.log
+rebuild_img.log
+weekly_fetch.log
+
+# ===== 数据库（本地数据，不入库）=====
+*.db
+*.sqlite
+*.sqlite3
+*.mdb
+# MariaDB/MySQL 数据文件
+*.ibd
+*.frm
+*.MYD
+*.MYI
+
+# ===== 抓取缓存与运行时数据 =====
+websearch_news.json
+*.json.cache
+
+# ===== 图片本地缓存（各环境独立生成）=====
+static/news_images/
+
+# ===== 虚拟环境 =====
+venv/
+env/
+.venv/
+ENV/
+
+# ===== IDE / 编辑器 =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ===== 操作系统 =====
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ===== 同步生成的临时包 =====
+knowledge_base_sync_*.zip
+kb_sync.zip
+
+# ===== 敏感配置（如有本地覆盖配置）=====
+config_local.py
+.env
+.env.local

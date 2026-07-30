@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block title %}个人知识库 · 首页{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>
+        {% if current_category %}
+            {% set cat = g.categories | selectattr('id', 'equalto', current_category) | list | first %}
+            {{ cat.name if cat else '分类笔记' }}
+        {% elif current_tag %}
+            标签：{{ current_tag }}
+        {% else %}
+            全部笔记
+        {% endif %}
+        <span class="count-hint">（{{ notes | length }} 篇）</span>
+    </h1>
+    <div class="page-actions">
+        <a href="{{ url_for('index', **request.args) }}" class="btn btn-default" title="刷新列表">🔄 刷新</a>
+        <a href="{{ url_for('create_note') }}" class="btn btn-primary">+ 新建笔记</a>
+    </div>
+</div>
+
+{% if notes %}
+<div class="notes-grid">
+    {% for note in notes %}
+    <div class="note-card {{ 'pinned' if note.is_pinned }}">
+        {% if note.is_pinned %}<div class="pin-badge">📌 置顶</div>{% endif %}
+        <a href="{{ url_for('view_note', note_id=note.id) }}" class="title-link">{{ note.title }}</a>
+        <div class="excerpt">{{ note.content | truncate_text(120) }}</div>
+        <div class="card-footer">
+            <span>
+                {% if note.category_name %}
+                    <span class="cat-tag" style="background:{{ note.category_color }}">{{ note.category_name }}</span>
+                {% endif %}
+                {% if note.tags %}
+                    {% for tag in note.tags.split(',') %}
+                        {% if tag.strip() %}<span class="tag-pill">#{{ tag.strip() }}</span>{% endif %}
+                    {% endfor %}
+                {% endif %}
+            </span>
+            <span>{{ note.updated_at.strftime('%m-%d') if note.updated_at else '' }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">📝</div>
+    <h3>还没有笔记</h3>
+    <p>点击「新建笔记」开始记录你的知识吧！</p>
+</div>
+{% endif %}
+{% endblock %}

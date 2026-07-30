@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}个人知识库{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='icon-knowledge.svg') }}">
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+    <link rel="apple-touch-icon" href="{{ url_for('static', filename='icon-128.png') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <header class="navbar">
+        <div class="nav-container">
+            <a href="{{ url_for('index') }}" class="brand">
+                <span class="brand-icon">📚</span> 个人知识库
+            </a>
+            <form class="search-box" action="{{ url_for('search') }}" method="get">
+                <input type="text" name="q" placeholder="搜索笔记..." value="{{ request.args.get('q', '') }}">
+                <button type="submit">搜索</button>
+            </form>
+            <nav class="nav-links">
+                <a href="{{ url_for('index') }}">首页</a>
+                <a href="{{ url_for('weekly') }}">📰 周报</a>
+                <a href="{{ url_for('dashboard') }}">📊 概览</a>
+                <a href="{{ url_for('create_note') }}" class="btn-primary">+ 新建笔记</a>
+                <a href="{{ url_for('categories') }}">分类</a>
+            </nav>
+        </div>
+    </header>
+
+    <div class="layout">
+        <aside class="sidebar">
+            <a href="{{ url_for('dashboard') }}" class="sidebar-link">📊 知识概览</a>
+            <h3>分类</h3>
+            <ul class="cat-list">
+                <li>
+                    <a href="{{ url_for('index') }}" class="{{ 'active' if not current_category and not current_tag }}">全部笔记</a>
+                    <span class="badge">{{ stats.note_count }}</span>
+                </li>
+                {% for cat in g.categories %}
+                <li>
+                    <a href="{{ url_for('index', category=cat.id) }}"
+                       class="{{ 'active' if current_category == cat.id }}">
+                        <span class="cat-dot" style="background:{{ cat.color }}"></span>
+                        {{ cat.name }}
+                    </a>
+                </li>
+                {% endfor %}
+            </ul>
+            <div class="sidebar-stats">
+                <div class="stat-item">
+                    <span class="stat-num">{{ stats.note_count }}</span>
+                    <span class="stat-label">笔记总数</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-num">{{ stats.cat_count }}</span>
+                    <span class="stat-label">分类数</span>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    <div class="flash-container">
+                        {% for category, message in messages %}
+                            <div class="flash flash-{{ category }}">{{ message }}</div>
+                        {% endfor %}
+                    </div>
+                {% endif %}
+            {% endwith %}
+
+            {% block content %}{% endblock %}
+        </main>
+    </div>
+
+    <footer class="footer">
+        <p>个人知识库 · 基于 Flask + MySQL 构建</p>
+    </footer>
+</body>
+</html>

@@ -1,0 +1,38 @@
+{% extends 'base.html' %}
+{% block title %}搜索结果 · 个人知识库{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h2>搜索结果{% if q %}：「{{ q }}」{% endif %}</h2>
+</div>
+
+{% if notes %}
+<p style="color:var(--text-light); margin-bottom:16px;">找到 {{ notes|length }} 条结果</p>
+<div class="notes-grid">
+    {% for note in notes %}
+    <div class="note-card {{ 'pinned' if note.is_pinned }}">
+        {% if note.is_pinned %}<div class="pin-badge">📌 置顶</div>{% endif %}
+        <a href="{{ url_for('view_note', note_id=note.id) }}" class="title-link">{{ note.title }}</a>
+        <div class="excerpt">{{ note.content | truncate_text(120) }}</div>
+        <div class="card-footer">
+            <span>
+                {% if note.category_name %}
+                    <span class="cat-tag" style="background:{{ note.category_color }}">{{ note.category_name }}</span>
+                {% endif %}
+            </span>
+            <span>{{ note.updated_at.strftime('%m-%d') if note.updated_at else '' }}</span>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon">🔍</div>
+    {% if q %}
+        <h3>未找到匹配「{{ q }}」的笔记</h3>
+        <p>试试其他关键词吧</p>
+    {% else %}
+        <h3>请输入搜索关键词</h3>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends 'base.html' %}
+{% block title %}{{ item.title }} · 周报详情{% endblock %}
+{% block content %}
+{% if needs_refresh %}
+<div class="fetching-banner">
+    <span class="spinner"></span>
+    正在后台抓取原文与生成 AI 分析，10 秒后自动刷新……
+    <a href="{{ url_for('weekly_note', news_id=item.id) }}" class="manual-refresh">立即刷新</a>
+</div>
+<script>
+    setTimeout(function () {
+        window.location.reload();
+    }, 10000);
+</script>
+{% endif %}
+<div class="weekly-detail-page">
+    {# 顶部返回 + 面包屑 #}
+    <div class="detail-topbar">
+        <a href="{{ url_for('weekly', region=item.region) }}" class="back-link">← 返回周报列表</a>
+        <span class="detail-breadcrumb">
+            {{ '🇨🇳 国内' if item.region == 'domestic' else '🌍 国外' }}
+            ·
+            {% set sec_name = {'tech':'🔬 科技','military':'⚔️ 军事','ai':'🤖 AI','economy':'📊 经济'}.get(item.section, item.section) %}
+            {{ sec_name }}
+        </span>
+    </div>
+
+    {# 标题区 #}
+    <header class="detail-header">
+        <h1 class="detail-title">{{ item.title }}</h1>
+        <div class="detail-meta">
+            {% if item.source %}
+            <span class="news-source">{{ item.source }}</span>
+            {% endif %}
+            {% if item.published_at %}
+            <span>🕐 {{ item.published_at.strftime('%Y-%m-%d %H:%M') }}</span>
+            {% endif %}
+            <span class="importance-badge" title="重要性评分">⭐ {{ item.importance }}</span>
+            {% if item.fetched_at %}
+            <span class="fetched-at" title="原文抓取时间">📥 已抓取于 {{ item.fetched_at.strftime('%m-%d %H:%M') }}</span>
+            {% endif %}
+        </div>
+        {% if item.url %}
+        <a href="{{ item.url }}" target="_blank" rel="noopener" class="source-link">
+            🔗 查看原文出处 ↗
+        </a>
+        {% endif %}
+    </header>
+
+    {# 摘要 #}
+    {% if item.summary %}
+    <section class="detail-section summary-section">
+        <h2 class="section-title">📝 新闻摘要</h2>
+        <p class="summary-text">{{ item.summary }}</p>
+    </section>
+    {% endif %}
+
+    {# 原文正文（附图内联在段落之间，与内容关联）#}
+    <section class="detail-section content-section">
+        <h2 class="section-title">📰 原文内容
+            {% if images %}<span class="img-count-hint">（含 {{ images|length }} 张配图，双击图片可放大）</span>{% endif %}
+        </h2>
+        {% if content_html %}
+        <article class="article-content">
+            {{ content_html | safe }}
+        </article>
+        {% else %}
+        <div class="content-empty">
+            <p>暂未抓取到原文正文</p>
+            <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn btn-default">
+                前往原文链接查看 ↗
+            </a>
+        </div>
+        {% endif %}
+    </section>
+
+    {# 底部 AI 总结与分析 #}
+    <section class="detail-section ai-section">
+        <h2 class="section-title ai-title">🤖 AI 总结与分析</h2>
+        {% if ai_html %}
+        <div class="ai-content">
+            {{ ai_html | safe }}
+        </div>
+        {% else %}
+        <div class="ai-empty">
+            <p>AI 分析尚未生成</p>
+            <form action="{{ url_for('weekly_reanalyze', news_id=item.id) }}" method="post">
+                <button type="submit" class="btn btn-primary">⚡ 重新生成 AI 分析</button>
+            </form>
+        </div>
+        {% endif %}
+    </section>
+
+    {# 底部操作 #}
+    <div class="detail-footer">
+        <a href="{{ url_for('weekly', region=item.region) }}" class="btn btn-default">← 返回周报</a>
+        {% if item.url %}
+        <a href="{{ item.url }}" target="_blank" rel="noopener" class="btn btn-default">
+            🔗 原文出处
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{# 图片灯箱：双击图片放大查看 #}
+<div id="lightbox" class="lightbox" onclick="closeLightbox()">
+    <span class="lightbox-close" title="关闭（ESC 或点击空白）">&times;</span>
+    <img id="lightbox-img" src="" alt="放大查看">
+    <p id="lightbox-caption"></p>
+</div>
+<script>
+// 双击内联图片放大
+document.addEventListener('dblclick', function (e) {
+    var fig = e.target.closest('.inline-image');
+    if (fig) {
+        e.preventDefault();
+        var full = fig.getAttribute('data-full');
+        var img = fig.querySelector('img');
+        var caption = fig.querySelector('figcaption');
+        var lb = document.getElementById('lightbox');
+        var lbImg = document.getElementById('lightbox-img');
+        var lbCap = document.getElementById('lightbox-caption');
+        lbImg.src = full || (img ? img.src : '');
+        lbCap.textContent = caption ? caption.textContent : '';
+        lb.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+});
+function closeLightbox() {
+    var lb = document.getElementById('lightbox');
+    lb.classList.remove('active');
+    document.body.style.overflow = '';
+    document.getElementById('lightbox-img').src = '';
+}
+// ESC 关闭
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeLightbox();
+});
+</script>
+{% endblock %}

@@ -1,0 +1,23 @@
+# 个人知识库 Python 依赖（Windows 兼容版）
+# 安装: pip install -r requirements.txt
+
+# Web 框架
+Flask==3.1.3
+
+# MySQL 驱动（纯 Python，Windows 无需编译 C 扩展）
+PyMySQL==1.1.1
+
+# Markdown 渲染
+markdown==3.7
+
+# HTML 清理（XSS 防护，app.py import bleach 必需）
+bleach==6.4.0
+
+# 代码高亮（markdown codehilite 扩展依赖）
+Pygments==2.18.0
+
+# MySQL 8 caching_sha2_password 认证支持
+cryptography==43.0.1
+
+# 生产级 WSGI 服务器（Windows 友好，替代 dev server）
+waitress==3.0.1

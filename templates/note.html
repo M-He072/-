@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+{% block title %}{{ note.title }} · 个人知识库{% endblock %}
+{% block content %}
+<div class="note-detail">
+    <h1>{{ note.title }}</h1>
+    <div class="note-meta">
+        {% if note.category_name %}
+            <span class="cat-tag" style="background:{{ note.category_color }}">{{ note.category_name }}</span>
+        {% else %}
+            <span>未分类</span>
+        {% endif %}
+        <span>👁 {{ note.views }} 次浏览</span>
+        <span>🕐 创建于 {{ note.created_at.strftime('%Y-%m-%d %H:%M') if note.created_at else '' }}</span>
+        <span>✏ 更新于 {{ note.updated_at.strftime('%Y-%m-%d %H:%M') if note.updated_at else '' }}</span>
+    </div>
+
+    {% if note.tags %}
+    <div class="note-meta" style="border:none; padding:0 0 16px 0; margin-bottom:0;">
+        {% for tag in note.tags.split(',') %}
+            {% if tag.strip() %}
+                <a href="{{ url_for('index', tag=tag.strip()) }}" class="tag-pill">#{{ tag.strip() }}</a>
+            {% endif %}
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <div class="note-content">
+        {{ note.content | markdown | safe }}
+    </div>
+
+    <div class="note-actions">
+        <a href="{{ url_for('edit_note', note_id=note.id) }}" class="btn btn-save">编辑</a>
+        <a href="{{ url_for('index') }}" class="btn btn-default">返回列表</a>
+        <form action="{{ url_for('delete_note', note_id=note.id) }}" method="post"
+              onsubmit="return confirm('确定删除这篇笔记吗？此操作不可恢复。');"
+              style="margin-left:auto;">
+            <button type="submit" class="btn btn-danger">删除</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

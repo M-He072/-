@@ -1,0 +1,83 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#8b5cf6"/>
+      <stop offset="60%"  stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#4f46e5"/>
+    </linearGradient>
+    <linearGradient id="cover" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#eef2ff" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f8fafc"/>
+    </linearGradient>
+    <filter id="shadow" x="-15%" y="-15%" width="130%" height="130%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="2.2"/>
+      <feOffset dx="0" dy="2" result="offsetblur"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- 圆角圆角底板 -->
+  <rect x="8" y="8" width="112" height="112" rx="22" ry="22" fill="url(#bg)"/>
+
+  <!-- 书本主体（带投影） -->
+  <g transform="translate(64,66)" filter="url(#shadow)">
+    <!-- 书本打开的左页 + 书脊 + 右页 -->
+    <path d="M -40,-32
+             L  -2,-32
+             L  -2, 30
+             L -40, 30 Z"
+          fill="url(#page)" stroke="#cbd5e1" stroke-width="1"/>
+    <path d="M   2,-32
+             L  40,-32
+             L  40, 30
+             L   2, 30 Z"
+          fill="url(#page)" stroke="#cbd5e1" stroke-width="1"/>
+
+    <!-- 书脊 -->
+    <rect x="-2" y="-32" width="4" height="62" fill="#6366f1"/>
+
+    <!-- 左页内容：文字行 -->
+    <g fill="#94a3b8">
+      <rect x="-36" y="-26" width="28" height="3.2" rx="1.6"/>
+      <rect x="-36" y="-19" width="22" height="3.2" rx="1.6"/>
+      <rect x="-36" y="-12" width="28" height="3.2" rx="1.6"/>
+      <rect x="-36" y="-5"  width="16" height="3.2" rx="1.6"/>
+      <rect x="-36" y="2"   width="28" height="3.2" rx="1.6"/>
+      <rect x="-36" y="9"   width="22" height="3.2" rx="1.6"/>
+      <rect x="-36" y="16"  width="28" height="3.2" rx="1.6"/>
+    </g>
+
+    <!-- 右页内容：文字行 + 一个小高亮标记(书签) -->
+    <g fill="#94a3b8">
+      <rect x="6"  y="-26" width="28" height="3.2" rx="1.6"/>
+      <rect x="6"  y="-19" width="22" height="3.2" rx="1.6"/>
+      <rect x="6"  y="-12" width="28" height="3.2" rx="1.6"/>
+      <rect x="6"  y="-5"  width="16" height="3.2" rx="1.6"/>
+      <rect x="6"  y="2"   width="28" height="3.2" rx="1.6"/>
+      <rect x="6"  y="9"   width="22" height="3.2" rx="1.6"/>
+      <rect x="6"  y="16"  width="20" height="3.2" rx="1.6"/>
+    </g>
+
+    <!-- 书签：右上角的彩色三角 -->
+    <polygon points="32,-32 40,-32 40,-18 36,-14 32,-18" fill="#ef4444"/>
+  </g>
+
+  <!-- 右上角小星/标记：代表"知识亮点" -->
+  <g transform="translate(100,28)" fill="#fde68a">
+    <path d="M 0,-8
+             L  1.9,-2.5
+             L  7.6,-2.5
+             L  3,0.9
+             L  4.8,6.4
+             L  0,3.2
+             L -4.8,6.4
+             L -3,0.9
+             L -7.6,-2.5
+             L -1.9,-2.5 Z"/>
+  </g>
+</svg>

@@ -1,0 +1,95 @@
+{% extends 'base.html' %}
+{% block title %}周报 · 个人知识库{% endblock %}
+{% block content %}
+<div class="version-tag">v2.1 双击/按钮版</div>
+<div class="weekly-page">
+    <div class="weekly-header">
+        <h1>📰 每周资讯周报</h1>
+        <div class="weekly-actions">
+            <span class="week-label">本周：{{ selected_week }}</span>
+            <form action="{{ url_for('weekly_refresh') }}" method="post" style="display:inline;">
+                <button type="submit" class="btn btn-default" title="立即抓取最新新闻">🔄 立即抓取</button>
+            </form>
+        </div>
+    </div>
+
+    {# 周选择器 #}
+    {% if weeks %}
+    <div class="week-selector">
+        <span class="week-selector-label">历史周报：</span>
+        {% for w in weeks %}
+        <a href="{{ url_for('weekly', region=region, week=w.week_of) }}"
+           class="week-chip {{ 'active' if w.week_of == selected_week }}">
+            {{ w.week_of.strftime('%m-%d') }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {# 国内/国外 切换 Tab #}
+    <div class="region-tabs">
+        <a href="{{ url_for('weekly', region='domestic', week=selected_week) }}"
+           class="region-tab {{ 'active' if region == 'domestic' }}">
+            🇨🇳 国内
+        </a>
+        <a href="{{ url_for('weekly', region='international', week=selected_week) }}"
+           class="region-tab {{ 'active' if region == 'international' }}">
+            🌍 国外
+        </a>
+    </div>
+
+    {# 4 个版块卡片 #}
+    <div class="sections-grid">
+        {% for key, name, icon in sections %}
+        <div class="section-card">
+            <div class="section-header">
+                <span class="section-icon">{{ icon }}</span>
+                <h3>{{ name }}</h3>
+                <span class="section-count">
+                    {{ stats_map.get(region ~ '_' ~ key, 0) }} 条
+                </span>
+            </div>
+            {% set data = news_by_section[key] %}
+            {% if data['items'] %}
+            <ul class="news-list">
+                {% for item in data['items'] %}
+                {% set detail_url = url_for('weekly_note', news_id=item.id) %}
+                <li class="news-item {{ 'top' if loop.index <= 3 }} clickable"
+                    ondblclick="location.href='{{ detail_url }}'"
+                    title="双击本条任意位置打开详情">
+                    <a href="{{ detail_url }}" class="news-title">{{ item.title }}</a>
+                    {% if item.summary %}
+                    <p class="news-summary">{{ item.summary[:120] }}{% if item.summary|length > 120 %}...{% endif %}</p>
+                    {% endif %}
+                    <div class="news-meta">
+                        <span class="news-source">{{ item.source }}</span>
+                        {% if item.published_at %}
+                        <span>{{ item.published_at.strftime('%m-%d %H:%M') }}</span>
+                        {% endif %}
+                        {% if item.fetched_at %}
+                        <span class="fetched-tag" title="原文已抓取">✅ 已抓取</span>
+                        {% else %}
+                        <span class="unfetched-tag" title="打开后自动抓取原文">⏳ 待抓取</span>
+                        {% endif %}
+                        <span class="importance-badge" title="重要性评分">{{ item.importance }}</span>
+                        <a href="{{ detail_url }}" class="open-detail-btn" title="单击打开详情">查看详情 →</a>
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <div class="section-empty">
+                <p>暂无{{ name }}新闻</p>
+                <p class="hint">点击「立即抓取」获取最新资讯</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="weekly-footer">
+        <p>📊 数据来源：RSS 订阅 + WebSearch 混合 · 每周五北京时间 08:00 自动更新</p>
+        <p class="hint">重要性评分基于来源权威度、标题关键词、内容长度综合计算</p>
+    </div>
+</div>
+{% endblock %}

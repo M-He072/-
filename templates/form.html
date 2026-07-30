@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}{{ '编辑笔记' if mode == 'edit' else '新建笔记' }} · 个人知识库{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>{{ '编辑笔记' if mode == 'edit' else '新建笔记' }}</h1>
+</div>
+
+<div class="form-card">
+    <form method="post">
+        <div class="form-group">
+            <label for="title">标题 *</label>
+            <input type="text" id="title" name="title" required
+                   value="{{ note.title if note else '' }}"
+                   placeholder="给这篇笔记起个标题...">
+        </div>
+
+        <div class="form-group">
+            <label for="category_id">分类</label>
+            <select id="category_id" name="category_id">
+                <option value="">-- 选择分类（可选）--</option>
+                {% for cat in g.categories %}
+                <option value="{{ cat.id }}"
+                    {{ 'selected' if note and note.category_id == cat.id }}>
+                    {{ cat.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div class="form-group">
+            <label for="tags">标签</label>
+            <input type="text" id="tags" name="tags"
+                   value="{{ note.tags if note else '' }}"
+                   placeholder="多个标签用英文逗号分隔，如：Python,数据库,笔记">
+            <div class="hint">用逗号分隔多个标签，方便后续按标签筛选</div>
+        </div>
+
+        <div class="form-group">
+            <label for="content">内容</label>
+            <textarea id="content" name="content"
+                      placeholder="支持 Markdown 语法编写...">{{ note.content if note else '' }}</textarea>
+            <div class="hint">支持 Markdown：# 标题、**加粗**、`代码`、- 列表、> 引用 等</div>
+        </div>
+
+        <div class="form-group">
+            <div class="checkbox-row">
+                <input type="checkbox" id="is_pinned" name="is_pinned"
+                       {{ 'checked' if note and note.is_pinned }}>
+                <label for="is_pinned" style="margin:0;">📌 置顶显示</label>
+            </div>
+        </div>
+
+        <div class="form-actions">
+            <button type="submit" class="btn btn-save">
+                {{ '保存修改' if mode == 'edit' else '创建笔记' }}
+            </button>
+            <a href="{{ url_for('index') }}" class="btn btn-default">取消</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
