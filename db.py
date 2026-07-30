@@ -20,16 +20,55 @@ def _build_kwargs():
 
 
 def get_connection():
-    """获取数据库连接"""
-    conn = pymysql.connect(
+    """获取数据库连接。
+
+    健壮性：如果配置的 database 不存在（1049 Unknown database），
+    会自动创建该库并重连，避免首次部署 / 换机器时卡在密码认证之外的环节。
+    """
+    import errno as _errno
+    kwargs = _build_kwargs()
+
+    def _connect():
+        _conn = pymysql.connect(
+            cursorclass=pymysql.cursors.DictCursor,
+            autocommit=False,
+            **_build_kwargs(),
+        )
+        with _conn.cursor() as cur:
+            cur.execute("SET time_zone='+08:00'")
+        return _conn
+
+    try:
+        return _connect()
+    except pymysql.OperationalError as e:
+        # 1049 Unknown database -> 自动创建并重连
+        err_code = e.args[0] if len(e.args) >= 1 else 0
+        if err_code != 1049:
+            raise
+
+    # 二次尝试：不带 database 连接，创建库，再重连
+    db_name = kwargs.get('database')
+    if not db_name:
+        raise  # 没指定 database，不是 1049 的适用场景，继续抛原错误
+
+    no_db_kwargs = dict(kwargs)
+    no_db_kwargs.pop('database', None)
+    conn_no_db = pymysql.connect(
         cursorclass=pymysql.cursors.DictCursor,
-        autocommit=False,
-        **_build_kwargs(),
+        autocommit=True,
+        **no_db_kwargs,
     )
-    # 统一会话时区为东八区，避免 Windows 系统时区差异
-    with conn.cursor() as cur:
-        cur.execute("SET time_zone='+08:00'")
-    return conn
+    try:
+        with conn_no_db.cursor() as cur:
+            cur.execute(
+                f"CREATE DATABASE IF NOT EXISTS `{db_name}` "
+                "CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci"
+            )
+    finally:
+        conn_no_db.close()
+
+    # 现在库已存在，正常连接
+    return _connect()
 
 
 @contextmanager
