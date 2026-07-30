@@ -67,12 +67,212 @@ def fetch_article(url, timeout=20):
             favor_precision=True,
             url=url,
         )
-        # 提取图片
-        images = extract_images(html, url)
-        return content or '', images
+        # 提取图片（基于已去广告的 HTML，确保广告图也不进入候选）
+        html_clean = strip_ad_html(html)
+        images = extract_images(html_clean, url)
+        # 正文广告清洗
+        content = clean_ad_content(content or '')
+        return content, images
     except Exception as e:
         print(f'  [!] 抓取失败 {url}: {e}')
         return None, []
+
+
+# ============================================================
+# 正文与 HTML 广告清洗
+# ============================================================
+# 广告/推广段落特征（整段命中即删除）
+AD_PARAGRAPH_MARKERS = [
+    # 推广/导流
+    '扫码下载', '扫码关注', '扫码加群', '长按识别', '二维码', '关注公众号',
+    '点击下载', '点击购买', '点击查看', '立即购买', '立即下载', '立即注册',
+    '免费领取', '免费试用', '限时抢购', '加入购物车', '下单立减',
+    '专属推广', '推广链接', '赞助内容', '广告推广', '软文推广',
+    # 推荐阅读类（站点内嵌的相关推荐）
+    '推荐阅读', '相关阅读', '延伸阅读', '热门推荐', '猜你喜欢', '你可能感兴趣',
+    '相关文章', '热点推荐', '小编推荐', '为您推荐',
+    # 版权/免责声明尾部
+    '免责声明', '风险提示', '本文仅供参考', '投资有风险',
+    '转载请注明', '版权声明', '如有侵权请联系',
+    # 下载/订阅引导
+    '下载APP', '下载客户端', '订阅本', '关注我们', '扫码进群',
+    # 广告位标识
+    'AD', 'ADVERTISEMENT', 'Sponsored', '赞助商',
+]
+
+# 广告/无关链接域名（出现在正文 <a> 中即移除该链接）
+AD_LINK_DOMAINS = [
+    'taobao.com', 'tmall.com', 'jd.com', 'pinduoduo.com', 'amazon.com/dp/',
+    'doubleclick.net', 'googlesyndication', 'googleadservices',
+    'affiliate', 'click trackers', 'redir', 'track.php',
+]
+
+# 广告/无关 HTML 块的 CSS class / id 特征
+AD_BLOCK_SELECTORS = [
+    # class/id 关键词
+    'ad-', 'ads-', 'advert', 'banner', 'sponsor', 'promotion', 'promo-',
+    'recommend', 'related', 'hot-read', 'tuijian', 'tuiguang',
+    'sidebar', 'widget-ad', 'pop-up', 'popup', 'modal-ad',
+    'qr-code', 'qrcode', 'download-bar', 'follow-us', 'subscribe-box',
+    'copyright', 'disclaimer', 'statement',
+]
+
+
+def strip_ad_html(html):
+    """清洗原始 HTML 中的广告/推广/推荐模块。
+
+    在提取图片前调用，确保广告图、二维码、推广banner不进入候选。
+    返回清洗后的 HTML（bytes/str 与输入一致）。
+    """
+    if not html:
+        return html
+    try:
+        from bs4 import BeautifulSoup, Comment
+        is_bytes = isinstance(html, bytes)
+        text = html.decode('utf-8', errors='ignore') if is_bytes else html
+        soup = BeautifulSoup(text, 'html.parser')
+
+        # 1. 删除 HTML 注释（常藏广告追踪）
+        for c in soup.find_all(string=lambda x: isinstance(x, Comment)):
+            c.extract()
+
+        # 2. 删除广告相关标签：iframe/script/noscript/ins（Google AdSense 容器）
+        for tag in soup.find_all(['iframe', 'script', 'noscript', 'ins', 'embed']):
+            tag.decompose()
+
+        # 3. 按 class/id 删除广告/推荐块
+        # 先收集命中标签，避免边遍历边 decompose 导致属性失效
+        to_remove_by_selector = []
+        for tag in soup.find_all(True):
+            attrs = tag.attrs or {}
+            cls = ' '.join(attrs.get('class') or []).lower()
+            tid = (attrs.get('id') or '').lower()
+            ident = cls + ' ' + tid
+            if any(sel in ident for sel in AD_BLOCK_SELECTORS):
+                to_remove_by_selector.append(tag)
+        for tag in to_remove_by_selector:
+            tag.decompose()
+
+        # 4. 删除广告网络容器（data-* 属性特征）
+        for tag in soup.find_all(attrs={'data-ad': True}):
+            tag.decompose()
+        for tag in soup.find_all(attrs={'data-ad-slot': True}):
+            tag.decompose()
+
+        # 5. 删除明显的广告/推广 <a> 链接（按域名）
+        for a in soup.find_all('a', href=True):
+            href = (a.get('href') or '').lower()
+            if any(d in href for d in AD_LINK_DOMAINS):
+                a.decompose()
+
+        # 6. 删除含广告标记文本的 <div>/<section>/<aside>/<p>/<figure>
+        # 同样先收集再删除，避免遍历中属性失效
+        to_remove_by_text = []
+        for tag in soup.find_all(['div', 'section', 'aside', 'p', 'figure']):
+            try:
+                txt = tag.get_text(' ', strip=True)
+            except Exception:
+                continue
+            if not txt:
+                continue
+            # 命中广告标记且文本较短（避免误删含"广告"二字的长正文）
+            if len(txt) < 120 and any(m.lower() in txt.lower() for m in AD_PARAGRAPH_MARKERS):
+                to_remove_by_text.append(tag)
+        for tag in to_remove_by_text:
+            tag.decompose()
+
+        out = str(soup)
+        return out.encode('utf-8') if is_bytes else out
+    except ImportError:
+        # 无 bs4：用正则兜底，删除广告相关标签块
+        text = html.decode('utf-8', errors='ignore') if isinstance(html, bytes) else html
+        # 删除 iframe/script/ins
+        text = re.sub(r'<(iframe|script|noscript|ins|embed)[^>]*>.*?</\1>', '', text, flags=re.S | re.I)
+        # 删除 class/id 含广告特征的 div/section
+        for sel in ['ad-', 'advert', 'banner', 'sponsor', 'promo', 'recommend', 'related', 'qrcode']:
+            text = re.sub(rf'<(div|section|aside|figure)[^>]*(class|id)="[^"]*{sel}[^"]*"[^>]*>.*?</\1>',
+                          '', text, flags=re.S | re.I)
+        return text.encode('utf-8') if isinstance(html, bytes) else text
+    except Exception:
+        return html
+
+
+def clean_ad_content(content):
+    """清洗 trafilatura 提取后的纯文本正文，移除广告/推广/推荐段落。
+
+    处理步骤：
+      1. 按行/段落分割
+      2. 删除命中广告标记的短段落
+      3. 删除"推荐阅读"区块（通常连续多行短链接标题）
+      4. 删除尾部版权/免责声明
+      5. 删除超短无意义行
+    """
+    if not content:
+        return content
+    try:
+        # 统一换行
+        text = content.replace('\r\n', '\n').replace('\r', '\n')
+        lines = text.split('\n')
+
+        cleaned = []
+        in_recommend_block = False  # 是否处于"推荐阅读"区块
+
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                # 空行：结束推荐阅读区块，但保留段落分隔
+                in_recommend_block = False
+                cleaned.append('')
+                continue
+
+            lower = stripped.lower()
+
+            # 进入推荐阅读区块：遇到标记即开始跳过，直到下一个空行
+            if not in_recommend_block and any(m.lower() in lower for m in
+                                              ['推荐阅读', '相关阅读', '延伸阅读', '热门推荐',
+                                               '猜你喜欢', '相关文章', '热点推荐', '为您推荐']):
+                in_recommend_block = True
+                continue
+
+            # 推荐阅读区块内的行（标题列表）跳过
+            if in_recommend_block:
+                continue
+
+            # 命中广告标记的行（短行直接删，长行保留避免误删正文）
+            if _is_ad_line(stripped):
+                continue
+
+            # 删除纯 URL 行（导流链接）
+            if re.match(r'^https?://\S+$', stripped):
+                continue
+
+            # 删除超短无意义行（<4字 且非标点）
+            if len(stripped) < 4 and not re.search(r'[。！？!?]', stripped):
+                continue
+
+            cleaned.append(line)
+
+        result = '\n'.join(cleaned).strip()
+        # 合并多余空行
+        result = re.sub(r'\n{3,}', '\n\n', result)
+        return result
+    except Exception:
+        return content
+
+
+def _is_ad_line(text):
+    """判断单行文本是否为广告/推广/版权声明"""
+    if not text:
+        return False
+    lower = text.lower()
+    # 短行（<120字）命中广告标记 → 删除
+    if len(text) < 120:
+        return any(m.lower() in lower for m in AD_PARAGRAPH_MARKERS)
+    # 长行不轻易判定为广告，避免误删正文
+    # 例外：明确版权声明行
+    if any(m in text for m in ['免责声明', '版权声明', '转载请注明', '本文仅供参考']):
+        return True
+    return False
 
 
 def extract_images(html, base_url):
@@ -92,9 +292,13 @@ def extract_images(html, base_url):
             # 过滤图标/Logo/广告
             alt = (img.get('alt') or '').lower()
             cls = ' '.join(img.get('class') or []).lower()
-            if any(x in src.lower() + alt + cls for x in
+            src_lower = src.lower()
+            if any(x in src_lower + alt + cls for x in
                    ['logo', 'icon', 'avatar', 'ad-', 'banner', 'pixel', 'tracking',
                     'loading', 'placeholder', 'sprite', 'blank.gif', 'spacer']):
+                continue
+            # 广告域名/路径过滤
+            if any(p in src_lower for p in AD_IMAGE_SRC_PATTERNS):
                 continue
             # SVG 矢量图通常是装饰
             if src.lower().endswith('.svg'):
@@ -161,8 +365,25 @@ IRRELEVANT_PATTERNS = [
     'loading', 'lazy', 'placeholder', 'default',
     'comment', '评论', '留言',
     'footer', 'header', 'sidebar', 'navigation', 'menu',
-    'advertisement', '广告', '推广',
+    'advertisement', '广告', '推广', '赞助', 'sponsor', 'promoted',
     'emoji', 'icon', 'logo',
+    # 广告网络/追踪图片
+    'doubleclick', 'googlesyndication', 'googleadservices', 'adnxs', 'adservice',
+    'tracking', 'beacon', 'pixel', 'b.gif', 'blank.gif', 'spacer.gif',
+    # 电商导流图
+    'taobao', 'tmall', 'jd.com', 'pinduoduo', 'amazon.com/dp',
+    # 下载/订阅引导图
+    'download-app', 'download-bar', 'follow-us', 'subscribe-box', 'open-in-app',
+    # 悬浮/弹窗类
+    'popup', 'float', 'modal', 'back-to-top',
+]
+
+# 广告图片常见 src 域名/路径特征
+AD_IMAGE_SRC_PATTERNS = [
+    'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+    'adnxs.com', 'adsystem.com', 'adservice', '/ads/', '/adserver/',
+    '/banner/', '/sponsor/', 'affiliate', 'track.gif', 'pixel.gif',
+    'gravatar.com',  # 头像服务
 ]
 
 # 与内容强相关的图片信号（命中则加分，即使 alt 为空也倾向保留）
@@ -186,6 +407,11 @@ def is_image_relevant(img, title, content_keywords):
     context = (img.get('context') or '').lower()
     src = img.get('src', '').lower()
     text = alt + ' ' + context + ' ' + src
+
+    # 0. 先排除广告域名/路径（src 级硬过滤）
+    for pat in AD_IMAGE_SRC_PATTERNS:
+        if pat in src:
+            return False, f'广告图片域名: {pat}'
 
     # 1. 先排除明显无关
     for pat in IRRELEVANT_PATTERNS:

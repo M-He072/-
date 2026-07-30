@@ -95,6 +95,80 @@ SOURCE_WEIGHTS = {
     'ithome': 6, 'huanqiu': 7, 'sina': 5,
 }
 
+# ============================================================
+# 广告/垃圾内容过滤（入库前拦截，避免污染周报）
+# ============================================================
+# 标题中命中以下关键词即视为广告/软文，直接丢弃
+AD_TITLE_PATTERNS = [
+    # 营销/促销类
+    '限时', '秒杀', '优惠', '折扣', '满减', '优惠券', '红包', '抽奖', '福利',
+    '免费领', '0元', '一折', '特价', '促销', '大促', '双11', '618', '黑五',
+    # 软文/导购类
+    '推荐购买', '入手', '值得买', '种草', '测评带货', '同款', '购买链接',
+    '广告', '软文', '赞助内容', 'sponsored', 'promoted', 'ad:',
+    # 引流类
+    '点击查看', '点击下载', '扫码', '加微信', '关注公众号', '进群',
+    '立即注册', '免费试用', '领取资料', '长按识别',
+    # 标题党/垃圾
+    '震惊', '惊呆了', '速看', '速扩散', '不看后悔', '删前速看',
+    '出大事了', '刚刚！', '突发！',  # 过短的纯煽动标题
+]
+
+# 摘要中命中以下关键词且无实质新闻内容时丢弃
+AD_SUMMARY_PATTERNS = [
+    '扫码下载', '点击下载', '立即购买', '立即领取', '优惠券',
+    '限时抢购', '加入购物车', '下单立减', '专属推广链接',
+    '关注公众号', '添加客服', '扫码加群', '免费领取',
+]
+
+# URL 域名/路径特征：明显广告/电商导流站
+AD_URL_PATTERNS = [
+    'taobao.com', 'tmall.com', 'jd.com', 'pinduoduo.com',
+    'douyin.com', 'kuaishou.com', 'amazon.com/dp/',  # 电商详情页（非新闻）
+    'affiliate', 'redirect', 'track', 'click?',
+    'doubleclick', 'googlesyndication',  # 广告网络
+]
+
+
+def is_ad_entry(title, summary, url):
+    """审核新闻条目是否为广告/软文/垃圾内容。
+
+    返回 (is_ad: bool, reason: str)
+    """
+    if not title:
+        return True, '空标题'
+
+    title_lower = title.lower()
+    summary_lower = (summary or '').lower()
+    url_lower = (url or '').lower()
+
+    # 1. 标题命中广告关键词
+    for pat in AD_TITLE_PATTERNS:
+        if pat.lower() in title_lower:
+            return True, f'标题含广告词: {pat}'
+
+    # 2. URL 命中广告域名/路径
+    for pat in AD_URL_PATTERNS:
+        if pat in url_lower:
+            return True, f'URL含广告特征: {pat}'
+
+    # 3. 摘要含强广告信号（命中任一即丢弃）
+    ad_hits = sum(1 for p in AD_SUMMARY_PATTERNS if p in summary_lower)
+    if ad_hits >= 1:
+        return True, f'摘要含广告信号({ad_hits}处)'
+
+    # 4. 标题过短且无实质信息（如纯"突发！"）
+    title_clean = re.sub(r'[！!？?\.。…\s]+', '', title)
+    if len(title_clean) < 4:
+        return True, f'标题过短无实质信息: {title}'
+
+    # 5. 标题全是标点/符号/表情
+    cn_alpha = re.findall(r'[\u4e00-\u9fa5a-zA-Z]', title)
+    if len(cn_alpha) < 3:
+        return True, f'标题无有效文字: {title}'
+
+    return False, ''
+
 
 def get_week_of():
     """获取本周五日期（若今天是周五则用今天，否则取最近的已过周五）"""
@@ -218,6 +292,7 @@ def fetch_all_rss():
                 errors += 1
                 continue
             count = 0
+            ad_blocked = 0
             for entry in entries[:15]:  # 每源最多取 15 条
                 title = getattr(entry, 'title', '').strip()
                 if not title:
@@ -228,13 +303,19 @@ def fetch_all_rss():
                 # 清理 HTML 标签
                 summary = re.sub(r'<[^>]+>', '', summary)[:300]
                 link = getattr(entry, 'link', '')
+                # 广告/软文过滤
+                is_ad, ad_reason = is_ad_entry(title, summary, link)
+                if is_ad:
+                    ad_blocked += 1
+                    print(f'      [广告过滤] {title[:40]}... ({ad_reason})')
+                    continue
                 source = urlparse(link).netloc if link else urlparse(url).netloc
                 pub_date = parse_entry_date(entry)
                 importance = score_importance(title, link, summary)
                 if insert_news(region, actual_section, title, summary,
                                source, link, pub_date, importance):
                     count += 1
-            print(f'  [OK] {url}: 获取 {len(entries)} 条，入库 {count} 条')
+            print(f'  [OK] {url}: 获取 {len(entries)} 条，入库 {count} 条，过滤广告 {ad_blocked} 条')
             total += count
             time.sleep(0.5)  # 礼貌延迟
     return total, errors
@@ -245,9 +326,16 @@ def import_from_json(json_path):
     with open(json_path, 'r', encoding='utf-8') as f:
         items = json.load(f)
     count = 0
+    ad_blocked = 0
     for item in items:
         title = item.get('title', '').strip()
         if not title:
+            continue
+        # 广告过滤
+        is_ad, ad_reason = is_ad_entry(title, item.get('summary', ''), item.get('url', ''))
+        if is_ad:
+            ad_blocked += 1
+            print(f'  [广告过滤] {title[:40]}... ({ad_reason})')
             continue
         importance = item.get('importance', score_importance(
             title, item.get('url', ''), item.get('summary', '')))
@@ -260,6 +348,7 @@ def import_from_json(json_path):
             importance,
         ):
             count += 1
+    print(f'\n  导入完成：入库 {count} 条，过滤广告 {ad_blocked} 条')
     return count
 
 
