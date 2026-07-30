@@ -18,11 +18,14 @@ if sys.platform.startswith('win'):
     os.environ.setdefault('PYTHONUTF8', '1')
 
 # MySQL 数据库配置
+# 如需自定义，推荐通过环境变量覆盖（无需改代码）：
+#   临时设置：在 CMD 执行 set DB_PASSWORD=xxx
+#   永久设置：系统环境变量中添加 DB_PASSWORD
 DB_CONFIG = {
     'host': os.getenv('DB_HOST', '127.0.0.1'),
     'port': int(os.getenv('DB_PORT', 3306)),
     'user': os.getenv('DB_USER', 'pdbuser'),
-    'password': os.getenv('DB_PASSWORD', 'pdbpass123'),
+    'password': os.getenv('DB_PASSWORD', 'qq13579qq'),
     'database': os.getenv('DB_NAME', 'personal_db'),
     'charset': 'utf8mb4',
     # MySQL 8 默认 caching_sha2_password；保持 None 让 PyMySQL 自动协商
@@ -33,8 +36,9 @@ DB_CONFIG = {
     'write_timeout': 30,
 }
 
-# Flask 配置
-SECRET_KEY = os.getenv('SECRET_KEY', 'personal-db-secret-key-change-me')
+# Flask 配置（用于 session 加密，请使用随机字符串）
+# 建议：https://docs.python.org/3/library/secrets.html#secrets.token_hex 生成
+SECRET_KEY = os.getenv('SECRET_KEY', 'm-he-knowledge-base-2026-0731-secure-token-change-if-needed')
 
 # 服务监听
 # 默认 0.0.0.0 允许外部访问（局域网/远程预览）
